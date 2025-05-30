@@ -1,0 +1,12 @@
+EXPORTS
+l_mkdir
+l_rmdir
+l_getpid
+l_close
+l_socketcall
+l_fcntl
+l_open
+l_write
+l_read
+l_socket
+l_connect
