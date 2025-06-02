@@ -27,6 +27,9 @@ namespace LinuxSys
         public static extern uint l_getpid();
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern uint l_getuid();
+
+        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int l_close(int fd);
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)]
@@ -52,6 +55,9 @@ namespace LinuxSys
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int l_connect(int sockfd, IntPtr addr, uint addrlen);
+
+        [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+        public static extern int l_connect_path(int sockfd, [MarshalAs(UnmanagedType.LPStr)] string path);
     }
 
     public class Socket
@@ -81,18 +87,28 @@ namespace LinuxSys
         private SockAddrUn socketAddress;
         public uint sockAddrSize;
         private int fileDescriptor;
+        private string path;
 
         private readonly Queue<byte> readLeftoverBuffer;
 
         public Socket(string path)
         {
-            Console.WriteLine($"MPRISBee D: Socket constructor start");
-            CreateUnixSocketAddress(path);
-            Console.WriteLine($"MPRISBee D: Socket constructor passed CreateUnixSocketAddress");
-            OpenUnixSocket();
-            Console.WriteLine($"MPRISBee D: Socket constructor passed OpenUnixSocket");
-            ConnectUnixSocket();
-            Console.WriteLine($"MPRISBee D: Socket constructor passed ConnectUnixSocket");
+            try
+            {
+                Console.WriteLine($"MPRISBee D: Socket constructor start");
+                CreateUnixSocketAddress(path);
+                Console.WriteLine($"MPRISBee D: Socket constructor passed CreateUnixSocketAddress");
+                this.path = path;
+                OpenUnixSocket();
+                Console.WriteLine($"MPRISBee D: Socket constructor passed OpenUnixSocket");
+                ConnectUnixSocket();
+                Console.WriteLine($"MPRISBee D: Socket constructor passed ConnectUnixSocket");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: Socket object instance failed IN {ex}");
+            }
+
 
             readLeftoverBuffer = new Queue<byte>();
             Console.WriteLine($"MPRISBee D: Socket constructor passed");
@@ -130,6 +146,14 @@ namespace LinuxSys
         // Helper method for Unix socket connection
         private void ConnectUnixSocket()
         {
+            /*var res = Syscalls.l_connect_path(fileDescriptor, path);
+
+            if (res < 0)
+            {
+                Console.WriteLine($"MPRISBee E: Errno: {res}");
+                throw new IOException("MPRISBee E: Cannot connect to a socket");
+            }*/
+
             IntPtr addrPtr = Marshal.AllocHGlobal(110);
             try
             {
@@ -157,9 +181,9 @@ namespace LinuxSys
             }
         }
 
-        public void WriteString(string text)
+        public void WriteStringNullTerminated(string text)
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(text);
+            byte[] bytes = Encoding.UTF8.GetBytes(text + '\0');
             int totalWritten = 0;
 
             while (totalWritten < bytes.Length)

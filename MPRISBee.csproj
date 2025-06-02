@@ -162,7 +162,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <PostBuildEvent>if $(Configuration)==Release (
-  C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -O2 -o $(ProjectDir)$(OutDir)linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
+  C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o $(ProjectDir)$(OutDir)linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
 ) else (
   C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -o $(ProjectDir)$(OutDir)linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
 )</PostBuildEvent>

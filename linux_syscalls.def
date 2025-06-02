@@ -10,3 +10,5 @@ l_write
 l_read
 l_socket
 l_connect
+l_connect_path
+l_write_errno

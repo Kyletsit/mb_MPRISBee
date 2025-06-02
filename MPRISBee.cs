@@ -86,16 +86,17 @@ namespace MusicBeePlugin
             {
                 case NotificationType.PluginStartup:
                     Console.WriteLine($"MPRISBee D: Plugin startup");
-                    uint pid = Syscalls.l_getpid();
-                    Console.WriteLine($"MPRISBee D: Got pid");
+                    uint uid = Syscalls.l_getuid();
 
                     try
                     {
-                        wineOut = new Socket("/tmp/mprisbee-wine-out-" + Convert.ToString(pid));
+                        string path = "/tmp/mprisbee" + Convert.ToString(uid) + "/wine-out";
+                        Console.WriteLine($"MPRISBee D: Path: {path}");
+                        wineOut = new Socket(path);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"MPRISBee E: Socket out connection failed: {ex}");
+                        Console.WriteLine($"MPRISBee E: Socket object instance failed OUT: {ex}");
                     }
 
                     Console.WriteLine($"MPRISBee D: Plugin startuped");
@@ -111,7 +112,8 @@ namespace MusicBeePlugin
                     try
                     {
                         mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.Artist, MetaDataType.TrackTitle }, out tags);
-                        wineOut.WriteString(tags[0] + " - " + tags[1]);
+                        wineOut.WriteStringNullTerminated("title: illegal paradise");
+                        wineOut.WriteStringNullTerminated(tags[0] + " - " + tags[1]);
                     }
                     catch (Exception ex)
                     {

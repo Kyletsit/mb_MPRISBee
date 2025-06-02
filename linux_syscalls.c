@@ -1,10 +1,16 @@
 #include <windows.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdarg.h>
 
 #define EXPORT __declspec(dllexport)
 
-struct sockaddr;
+struct sockaddr_un {
+    unsigned short sun_family;               /* AF_UNIX */
+    char           sun_path[108];            /* pathname */
+};
+
+#define AF_UNIX     1
 
 EXPORT __declspec(naked) int l_mkdir(const char* pathname, unsigned int mode) {
     __asm__ (
@@ -35,6 +41,14 @@ EXPORT __declspec(naked) unsigned int l_getpid() {
             "int 0x80\n\t"
             "ret"
             );
+}
+
+EXPORT __declspec(naked) unsigned int l_getuid() {
+    __asm__ (
+        "mov eax, 24\n\t"
+        "int 0x80\n\t"
+        "ret"
+    );
 }
 
 EXPORT __declspec(naked) int l_close(int fd) {
@@ -125,10 +139,21 @@ EXPORT int l_connect(int sockfd, const struct sockaddr *addr, unsigned int addrl
     args[0] = (void*)(int*)sockfd;
     args[1] = (void*)addr;
     args[2] = (void*)(int*)addrlen;
-    int result = l_socketcall(3, args);
+    return l_socketcall(3, args);
+}
+
+EXPORT int l_connect_path(int sockfd, char path[]) {
+    struct sockaddr_un addr;
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, path, min(strlen(path), sizeof(addr.sun_path)-1));
+
+    int result = l_connect(sockfd, (struct sockaddr*) &addr, sizeof(addr));
+    perror("MPRISBee D perror");
+    int error_number = -errno;
 
     if (result < 0) {
-        return -errno;
+        printf("MPRISBee D: Result %d, error_number = %d\n", result, error_number);
+        return error_number;
     }
 
     return result;
@@ -136,9 +161,10 @@ EXPORT int l_connect(int sockfd, const struct sockaddr *addr, unsigned int addrl
 
 EXPORT int l_write_errno(unsigned int fd, const char* buf, unsigned int count) {
     int result = l_write(fd, buf, count);
+    int error = -errno;
 
     if (result < 0) {
-        return -errno;
+        return error;
     }
 
     return result;
