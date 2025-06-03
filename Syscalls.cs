@@ -181,9 +181,9 @@ namespace LinuxSys
             }
         }
 
-        public void WriteStringNullTerminated(string text)
+        public void WriteStringNLTerminated(string text)
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(text + '\0');
+            byte[] bytes = Encoding.UTF8.GetBytes(text + '\n');
             int totalWritten = 0;
 
             while (totalWritten < bytes.Length)
@@ -246,7 +246,7 @@ namespace LinuxSys
             return Encoding.UTF8.GetString(buffer, 0, (int)totalRead);
         }
 
-        public string ReadNullTerminatedString()
+        public string ReadNLTerminatedString()
         {
             List<byte> result = new List<byte>();
             const int chunkSize = 256;
@@ -254,13 +254,13 @@ namespace LinuxSys
             var stopwatch = Stopwatch.StartNew();
             const int timeoutMillis = 500;
 
-            bool foundNull = false;
-            while (!foundNull)
+            bool foundNL = false;
+            while (!foundNL)
             {
                 while (readLeftoverBuffer.Count > 0)
                 {
                     byte b = readLeftoverBuffer.Dequeue();
-                    if (b == 0)
+                    if (b == '\n')
                     {
                         return Encoding.UTF8.GetString(result.ToArray());
                     }
@@ -293,9 +293,9 @@ namespace LinuxSys
                 for (int i = 0; i < bytesRead; i++)
                 {
                     byte b = chunk[i];
-                    if (b == 0)
+                    if (b == '\n')
                     {
-                        foundNull = true;
+                        foundNL = true;
                         for (int j = i + 1; j < bytesRead; j++)
                         {
                             readLeftoverBuffer.Enqueue(chunk[j]);

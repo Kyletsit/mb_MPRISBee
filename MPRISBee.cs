@@ -1,22 +1,78 @@
-﻿using System;
+﻿using LinuxSys;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
-using System.Data.Common;
 using System.Drawing;
-using System.Runtime.InteropServices;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using LinuxSys;
+using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin
 {
+
+    public abstract class MprisMessage
+    {
+        public string Event { get; set; }
+    }
+
+    public class MPRISNext : MprisMessage { }
+    public class MPRISPrevious : MprisMessage { }
+    public class MPRISPause : MprisMessage { }
+    public class MPRISPlayPause : MprisMessage { }
+    public class MPRISStop : MprisMessage { }
+    public class MPRISPlay : MprisMessage { }
+
+    public class MPRISSeek : MprisMessage
+    {
+        public long Duration { get; set; }
+    }
+
+    public class MprisMessageConverter : JsonConverter
+    {
+        public override bool CanConvert(Type objectType)
+        {
+            return objectType == typeof(MprisMessage);
+        }
+
+        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        {
+            JObject obj = JObject.Load(reader);
+            string eventType = (string)obj["event"];
+
+            MprisMessage message = eventType switch
+            {
+                "next" => new MPRISNext(),
+                "previous" => new MPRISPrevious(),
+                "pause" => new MPRISPause(),
+                "playpause" => new MPRISPlayPause(),
+                "stop" => new MPRISStop(),
+                "play" => new MPRISPlay(),
+                "seek" => new MPRISSeek(),
+                _ => throw new JsonSerializationException($"Unknown event type: {eventType}")
+            };
+
+            serializer.Populate(obj.CreateReader(), message);
+            return message;
+        }
+
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            JObject obj = JObject.FromObject(value);
+            obj.WriteTo(writer);
+        }
+    }
+
     public partial class Plugin
     {
         private MusicBeeApiInterface mbApiInterface;
         private PluginInfo about = new PluginInfo();
 
+        private CancellationTokenSource cts = new CancellationTokenSource();
+
         Socket wineOut;
-        Socket wineIn;
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
@@ -70,6 +126,7 @@ namespace MusicBeePlugin
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
         public void Close(PluginCloseReason reason)
         {
+            StopListening();
         }
 
         // uninstall this plugin - clean up any persisted files
@@ -93,10 +150,12 @@ namespace MusicBeePlugin
                         string path = "/tmp/mprisbee" + Convert.ToString(uid) + "/wine-out";
                         Console.WriteLine($"MPRISBee D: Path: {path}");
                         wineOut = new Socket(path);
+
+                        StartListening();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"MPRISBee E: Socket object instance failed OUT: {ex}");
+                        Console.WriteLine($"MPRISBee E: {ex}");
                     }
 
                     Console.WriteLine($"MPRISBee D: Plugin startuped");
@@ -112,12 +171,12 @@ namespace MusicBeePlugin
                     try
                     {
                         mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.Artist, MetaDataType.TrackTitle }, out tags);
-                        wineOut.WriteStringNullTerminated("title: illegal paradise");
-                        wineOut.WriteStringNullTerminated(tags[0] + " - " + tags[1]);
+                        wineOut.WriteStringNLTerminated("title: illegal paradise");
+                        // wineOut.WriteStringNLTerminated(tags[0] + " - " + tags[1]);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"MPRISBee E: ApiCall or socket write failed: {ex}");
+                        Console.WriteLine($"MPRISBee E: {ex}");
                     }
                     
                     break;
@@ -126,6 +185,101 @@ namespace MusicBeePlugin
                     break;
 
                 case NotificationType.PlayerRepeatChanged:
+                    break;
+            }
+        }
+
+
+        private void StartListening()
+        {
+            Task.Run(() => ListenLoop(cts.Token));
+        }
+
+        private async Task ListenLoop(CancellationToken token)
+        {
+            var settings = new JsonSerializerSettings
+            {
+                Converters = new List<JsonConverter> { new MprisMessageConverter() }
+            };
+
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    string json = await ReadMessageAsync();
+                    if (!string.IsNullOrWhiteSpace(json))
+                    {
+                        try
+                        {
+                            MprisMessage message = JsonConvert.DeserializeObject<MprisMessage>(json, settings);
+                            HandlePlayerEvent(message);
+                        }
+                        catch (JsonException ex)
+                        {
+                            Console.WriteLine("Failed to parse JSON: " + ex.Message);
+                        }
+                    }
+                }
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine("Socket I/O failed: " + ex.Message);
+            }
+        }
+
+        private void StopListening()
+        {
+            cts.Cancel();
+        }
+
+        private Task<string> ReadMessageAsync()
+        {
+            return Task.Run(() => wineOut.ReadNLTerminatedString());
+        }
+
+        private void HandlePlayerEvent(MprisMessage message)
+        {
+            switch (message)
+            {
+                case MPRISNext:
+                    mbApiInterface.Player_PlayNextTrack();
+                    break;
+
+                case MPRISPrevious:
+                    mbApiInterface.Player_PlayPreviousTrack();
+                    break;
+
+                case MPRISPause:
+                    if (mbApiInterface.Player_GetPlayState() == Plugin.PlayState.Playing)
+                    {
+                        mbApiInterface.Player_PlayPause();
+                    }
+                    break;
+
+                case MPRISPlayPause:
+                    mbApiInterface.Player_PlayPause();
+                    break;
+
+                case MPRISStop:
+                    mbApiInterface.Player_Stop();
+                    break;
+
+                case MPRISPlay:
+                    if (mbApiInterface.Player_GetPlayState() == Plugin.PlayState.Paused || mbApiInterface.Player_GetPlayState() == Plugin.PlayState.Stopped)
+                    {
+                        mbApiInterface.Player_PlayPause();
+                    }
+                    break;
+
+                case MPRISSeek seek:
+                    if (seek.Duration <= int.MaxValue && seek.Duration >= int.MinValue)
+                    {
+                        mbApiInterface.Player_SetPosition((int)seek.Duration);
+                    }
+                    else
+                    {
+                        throw new OverflowException("Duration value is too large for int.");
+                    }
                     break;
             }
         }
