@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Security.Cryptography;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin
@@ -63,6 +65,27 @@ namespace MusicBeePlugin
             JObject obj = JObject.FromObject(value);
             obj.WriteTo(writer);
         }
+    }
+
+    public class MprisMetadata
+    {
+        [JsonProperty("trackid")]
+        public string TrackId { get; set; }
+
+        [JsonProperty("title")]
+        public string Title { get; set; }
+
+        [JsonProperty("artist")]
+        public string Artist { get; set; }
+    }
+
+    public class TrackChangeEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "trackchange";
+
+        [JsonProperty("metadata")]
+        public MprisMetadata Metadata { get; set; }
     }
 
     public partial class Plugin
@@ -170,9 +193,24 @@ namespace MusicBeePlugin
 
                     try
                     {
-                        mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.Artist, MetaDataType.TrackTitle }, out tags);
-                        wineOut.WriteStringNLTerminated("title: illegal paradise");
-                        // wineOut.WriteStringNLTerminated(tags[0] + " - " + tags[1]);
+                        mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.TrackTitle, MetaDataType.Artist, MetaDataType.Album }, out tags);
+                        string trackid = MakeTrackId(tags[0], tags[1], tags[2]);
+
+                        var metadata = new MprisMetadata
+                        {
+                            TrackId = trackid,
+                            Title = tags[0],
+                            Artist = tags[1]
+                        };
+
+                        var trackChangeEvent = new TrackChangeEvent
+                        {
+                            Metadata = metadata
+                        };
+
+                        string json = JsonConvert.SerializeObject(trackChangeEvent);
+
+                        wineOut.WriteStringNLTerminated(json);
                     }
                     catch (Exception ex)
                     {
@@ -189,6 +227,14 @@ namespace MusicBeePlugin
             }
         }
 
+        private static string MakeTrackId(string title, string artist, string album)
+        {
+            return "/org/musicbee/track/" + BitConverter.ToString(
+                    SHA256.Create().ComputeHash(
+                            Encoding.UTF8.GetBytes(title + artist + album)
+                        )
+                ).Replace("-", "").ToLower();
+        }
 
         private void StartListening()
         {
