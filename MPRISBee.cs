@@ -77,6 +77,12 @@ namespace MusicBeePlugin
 
         [JsonProperty("artist")]
         public string Artist { get; set; }
+
+        [JsonProperty("album")]
+        public string Album { get; set; }
+
+        [JsonProperty("albumartpath")]
+        public string AlbumArtPath { get; set; }
     }
 
     public class TrackChangeEvent
@@ -196,11 +202,18 @@ namespace MusicBeePlugin
                         mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.TrackTitle, MetaDataType.Artist, MetaDataType.Album }, out tags);
                         string trackid = MakeTrackId(tags[0], tags[1], tags[2]);
 
+                        // var artwork = mbApiInterface.NowPlaying_GetArtwork();
+                        var artworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
+                        // Console.WriteLine($"MPRISBee D: artwork: {artwork}");
+                        Console.WriteLine($"MPRISBee D: artwork url: {artworkUrl}");
+
                         var metadata = new MprisMetadata
                         {
                             TrackId = trackid,
                             Title = tags[0],
-                            Artist = tags[1]
+                            Artist = tags[1],
+                            Album = tags[2],
+                            AlbumArtPath = artworkUrl
                         };
 
                         var trackChangeEvent = new TrackChangeEvent
