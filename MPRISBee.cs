@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Security.Cryptography;
 using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin
@@ -29,7 +29,30 @@ namespace MusicBeePlugin
 
     public class MPRISSeek : MprisMessage
     {
-        public long Duration { get; set; }
+        public long Offset { get; set; }
+    }
+    public class MPRISPosition : MprisMessage
+    {
+        public string TrackId { get; set; }
+        public long Position { get; set; }
+    }
+    public enum LoopStatus
+    {
+        None,
+        Track,
+        Playlist
+    }
+    public class MPRISLoopStatus : MprisMessage
+    {
+        public LoopStatus status { get; set; }
+    }
+    public class MPRISShuffle : MprisMessage
+    {
+        public bool shuffle { get; set; }
+    }
+    public class MPRISVolume : MprisMessage
+    {
+        public float volume { get; set; }
     }
 
     public class MprisMessageConverter : JsonConverter
@@ -53,6 +76,10 @@ namespace MusicBeePlugin
                 "stop" => new MPRISStop(),
                 "play" => new MPRISPlay(),
                 "seek" => new MPRISSeek(),
+                "position" => new MPRISPosition(),
+                "loop_status" => new MPRISLoopStatus(),
+                "shuffle" => new MPRISShuffle(),
+                "volume" => new MPRISVolume(),
                 _ => throw new JsonSerializationException($"Unknown event type: {eventType}")
             };
 
@@ -75,13 +102,51 @@ namespace MusicBeePlugin
         [JsonProperty("title")]
         public string Title { get; set; }
 
+        [JsonProperty("length")]
+        public long Length { get; set; }
+
         [JsonProperty("artist")]
-        public string Artist { get; set; }
+        public string[] Artists { get; set; }
 
         [JsonProperty("album")]
         public string Album { get; set; }
 
-        [JsonProperty("albumartpath")]
+        [JsonProperty("file_url")]
+        public string FileUrl { get; set; }
+
+        // Optional fields vvvv
+
+        [JsonProperty("disc_number", NullValueHandling = NullValueHandling.Ignore)]
+        public string DiscNumber { get; set; }
+
+        [JsonProperty("track_number", NullValueHandling = NullValueHandling.Ignore)]
+        public string TrackNumber { get; set; }
+
+        [JsonProperty("album_artist", NullValueHandling = NullValueHandling.Ignore)]
+        public string[] AlbumArtist { get; set; }
+
+        [JsonProperty("composer", NullValueHandling = NullValueHandling.Ignore)]
+        public string[] Composers { get; set; }
+
+        [JsonProperty("lyricist", NullValueHandling = NullValueHandling.Ignore)]
+        public string[] Lyricist { get; set; }
+
+        [JsonProperty("genre", NullValueHandling = NullValueHandling.Ignore)]
+        public string[] Genres { get; set; }
+
+        [JsonProperty("audio_bpm", NullValueHandling = NullValueHandling.Ignore)]
+        public string AudioBpm { get; set; }
+
+        [JsonProperty("content_created", NullValueHandling = NullValueHandling.Ignore)]
+        public string ContentCreated { get; set; }
+
+        [JsonProperty("user_rating", NullValueHandling = NullValueHandling.Ignore)]
+        public string UserRating { get; set; }
+
+        [JsonProperty("comment", NullValueHandling = NullValueHandling.Ignore)]
+        public string[] Comments { get; set; }
+
+        [JsonProperty("albumartpath", NullValueHandling = NullValueHandling.Ignore)]
         public string AlbumArtPath { get; set; }
     }
 
@@ -92,6 +157,35 @@ namespace MusicBeePlugin
 
         [JsonProperty("metadata")]
         public MprisMetadata Metadata { get; set; }
+    }
+
+    public class SeekEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "seek";
+
+        [JsonProperty("offset")]
+        public long Offset { get; set; }
+    }
+    public class PauseEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "pause";
+    }
+    public class PlayPauseEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "playpause";
+    }
+    public class PlayEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "play";
+    }
+    public class ExitEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "exit";
     }
 
     public partial class Plugin
@@ -155,6 +249,19 @@ namespace MusicBeePlugin
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
         public void Close(PluginCloseReason reason)
         {
+            var exitEvent = new ExitEvent();
+            string json = JsonConvert.SerializeObject(exitEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                StopListening();
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+
             StopListening();
         }
 
@@ -191,38 +298,71 @@ namespace MusicBeePlugin
                     break;
 
                 case NotificationType.PlayStateChanged:
+                    Console.WriteLine($"MPRISBee D: PlayState changed");
                     break;
 
                 case NotificationType.TrackChanged:
                     Console.WriteLine($"MPRISBee D: Track changed");
                     string[] tags;
+                    
+                    mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.TrackTitle, MetaDataType.MultiArtist, MetaDataType.Album,
+                                                                  MetaDataType.DiscNo, MetaDataType.TrackNo,
+                                                                  MetaDataType.AlbumArtist, MetaDataType.MultiComposer, MetaDataType.Lyricist,
+                                                                  MetaDataType.Genres, MetaDataType.BeatsPerMin, MetaDataType.Year,
+                                                                  MetaDataType.Rating, MetaDataType.Comment }, out tags);
+                    string Title, Album, DiscNo, TrackNo, BeatsPerMin, Year, Rating;
+                    string[] Artists, Composers, Genres;
+                    string[] AlbumArtist = new string[1];
+                    string[] Lyricist = new string[1];
+                    string[] Comment = new string[1];
+
+                    (Title,   Album,   DiscNo,  TrackNo, AlbumArtist[0], Lyricist[0], BeatsPerMin, Year,     Rating,   Comment[0]) = 
+                    (tags[0], tags[2], tags[3], tags[4], tags[5],        tags[7],     tags[9],     tags[10], tags[11], tags[12]);
+
+                    (Artists, Composers, Genres) = (tags[1].Split('\0'), tags[6].Split('\0'), tags[8].Split('\0'));
+
+                    string FileUrl = mbApiInterface.NowPlaying_GetFileUrl();
+                    Console.WriteLine($"MPRISBee D: file url: {FileUrl}");
+                    string TrackId = MakeTrackId(FileUrl);
+
+                    long Length = mbApiInterface.NowPlaying_GetDuration();
+
+                    var ArtworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
+                    Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
+
+                    var metadata = new MprisMetadata
+                    {
+                        TrackId = TrackId,
+                        Title = Title,
+                        Length = Length,
+                        Artists = Artists,
+                        Album = Album,
+                        FileUrl = FileUrl,
+
+                        DiscNumber = DiscNo,
+                        TrackNumber = TrackNo,
+                        AlbumArtist = AlbumArtist,
+                        Composers = Composers,
+                        Lyricist = Lyricist,
+                        Genres = Genres,
+                        AudioBpm = BeatsPerMin,
+                        ContentCreated = Year,
+                        UserRating = Rating,
+                        Comments = Comment,
+                        AlbumArtPath = ArtworkUrl,
+                    };
+
+                    Console.WriteLine(metadata);
+
+                    var trackChangeEvent = new TrackChangeEvent
+                    {
+                        Metadata = metadata,
+                    };
+
+                    string json = JsonConvert.SerializeObject(trackChangeEvent);
 
                     try
                     {
-                        mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.TrackTitle, MetaDataType.Artist, MetaDataType.Album }, out tags);
-                        string trackid = MakeTrackId(tags[0], tags[1], tags[2]);
-
-                        // var artwork = mbApiInterface.NowPlaying_GetArtwork();
-                        var artworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
-                        // Console.WriteLine($"MPRISBee D: artwork: {artwork}");
-                        Console.WriteLine($"MPRISBee D: artwork url: {artworkUrl}");
-
-                        var metadata = new MprisMetadata
-                        {
-                            TrackId = trackid,
-                            Title = tags[0],
-                            Artist = tags[1],
-                            Album = tags[2],
-                            AlbumArtPath = artworkUrl
-                        };
-
-                        var trackChangeEvent = new TrackChangeEvent
-                        {
-                            Metadata = metadata
-                        };
-
-                        string json = JsonConvert.SerializeObject(trackChangeEvent);
-
                         wineOut.WriteStringNLTerminated(json);
                     }
                     catch (Exception ex)
@@ -240,11 +380,11 @@ namespace MusicBeePlugin
             }
         }
 
-        private static string MakeTrackId(string title, string artist, string album)
+        private static string MakeTrackId(string url)
         {
             return "/org/musicbee/track/" + BitConverter.ToString(
                     SHA256.Create().ComputeHash(
-                            Encoding.UTF8.GetBytes(title + artist + album)
+                            Encoding.UTF8.GetBytes(url)
                         )
                 ).Replace("-", "").ToLower();
         }
@@ -330,15 +470,50 @@ namespace MusicBeePlugin
                     }
                     break;
 
-                case MPRISSeek seek:
-                    if (seek.Duration <= int.MaxValue && seek.Duration >= int.MinValue)
+                case MPRISSeek Seek:
+                    if (Seek.Offset <= int.MaxValue && Seek.Offset >= int.MinValue)
                     {
-                        mbApiInterface.Player_SetPosition((int)seek.Duration);
+                        var currentPos = mbApiInterface.Player_GetPosition();
+                        mbApiInterface.Player_SetPosition(currentPos + (int)Seek.Offset);
                     }
                     else
                     {
-                        throw new OverflowException("Duration value is too large for int.");
+                        throw new OverflowException("Offset value is too large for int.");
                     }
+                    break;
+
+                case MPRISPosition Position:
+                    if (Position.Position <= int.MaxValue && Position.Position >= int.MinValue)
+                    {
+                        mbApiInterface.Player_SetPosition((int)Position.Position);
+                    }
+                    else
+                    {
+                        throw new OverflowException("Position value is too large for int.");
+                    }
+                    break;
+
+                case MPRISLoopStatus Status:
+                    switch (Status.status)
+                    {
+                        case LoopStatus.None:
+                            mbApiInterface.Player_SetRepeat(RepeatMode.None);
+                            break;
+                        case LoopStatus.Track:
+                            mbApiInterface.Player_SetRepeat(RepeatMode.One);
+                            break;
+                        case LoopStatus.Playlist:
+                            mbApiInterface.Player_SetRepeat(RepeatMode.All);
+                            break;
+                    }
+                    break;
+
+                case MPRISShuffle Shuffle:
+                    mbApiInterface.Player_SetShuffle(Shuffle.shuffle);
+                    break;
+
+                case MPRISVolume Volume:
+                    mbApiInterface.Player_SetVolume(Volume.volume);
                     break;
             }
         }
