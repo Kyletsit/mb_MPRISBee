@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -14,7 +15,8 @@ using static MusicBeePlugin.Plugin;
 
 namespace MusicBeePlugin
 {
-
+    // Incoming messages from MPRIS from mprisbee-bridge
+    [JsonConverter(typeof(MprisMessageConverter))]
     public abstract class MprisMessage
     {
         public string Event { get; set; }
@@ -44,22 +46,50 @@ namespace MusicBeePlugin
     }
     public class MPRISLoopStatus : MprisMessage
     {
-        public LoopStatus status { get; set; }
+        public static LoopStatus RepeatToLoop(RepeatMode mode)
+        {
+            switch (mode)
+            {
+                case RepeatMode.All:
+                    return LoopStatus.Playlist;
+                case RepeatMode.One:
+                    return LoopStatus.Track;
+                case RepeatMode.None:
+                default:
+                    return LoopStatus.None; 
+            }
+        }
+
+        public static RepeatMode LoopToRepeat(LoopStatus status)
+        {
+            switch (status)
+            {
+                case LoopStatus.Playlist:
+                    return RepeatMode.All;
+                case LoopStatus.Track:
+                    return RepeatMode.One;
+                case LoopStatus.None:
+                default:
+                    return RepeatMode.None;
+            }
+        }
+
+        public LoopStatus Status { get; set; }
     }
     public class MPRISShuffle : MprisMessage
     {
-        public bool shuffle { get; set; }
+        public bool Shuffle { get; set; }
     }
     public class MPRISVolume : MprisMessage
     {
-        public float volume { get; set; }
+        public float Volume { get; set; }
     }
 
     public class MprisMessageConverter : JsonConverter
     {
         public override bool CanConvert(Type objectType)
         {
-            return objectType == typeof(MprisMessage);
+            return typeof(MprisMessage).IsAssignableFrom(objectType);
         }
 
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
@@ -75,11 +105,27 @@ namespace MusicBeePlugin
                 "playpause" => new MPRISPlayPause(),
                 "stop" => new MPRISStop(),
                 "play" => new MPRISPlay(),
-                "seek" => new MPRISSeek(),
-                "position" => new MPRISPosition(),
-                "loop_status" => new MPRISLoopStatus(),
-                "shuffle" => new MPRISShuffle(),
-                "volume" => new MPRISVolume(),
+                "seek" => new MPRISSeek()
+                {
+                    Offset = (long)obj["offset"],
+                },
+                "position" => new MPRISPosition()
+                {
+                    TrackId = (string)obj["trackid"],
+                    Position = (long)obj["position"],
+                },
+                "loop_status" => new MPRISLoopStatus()
+                {
+                    Status = obj["status"].ToObject<LoopStatus>(),
+                },
+                "shuffle" => new MPRISShuffle()
+                {
+                    Shuffle = (bool)obj["shuffle"],
+                },
+                "volume" => new MPRISVolume()
+                {
+                    Volume = (float)obj["volume"],
+                },
                 _ => throw new JsonSerializationException($"Unknown event type: {eventType}")
             };
 
@@ -145,20 +191,28 @@ namespace MusicBeePlugin
 
         [JsonProperty("comment", NullValueHandling = NullValueHandling.Ignore)]
         public string[] Comments { get; set; }
-
-        [JsonProperty("albumartpath", NullValueHandling = NullValueHandling.Ignore)]
-        public string AlbumArtPath { get; set; }
     }
 
-    public class TrackChangeEvent
+    // Outgoing messages to mprisbee-bridge
+    public class MetadataChangeEvent
     {
         [JsonProperty("event")]
-        public string Event => "trackchange";
+        public string Event => "metachange";
 
         [JsonProperty("metadata")]
         public MprisMetadata Metadata { get; set; }
     }
+    public class ArtUpdateEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "artupdate";
 
+        [JsonProperty("trackid")]
+        public string TrackId { get; set; }
+
+        [JsonProperty("albumartpath")]
+        public string Path { get; set; }
+    }
     public class SeekEvent
     {
         [JsonProperty("event")]
@@ -172,15 +226,31 @@ namespace MusicBeePlugin
         [JsonProperty("event")]
         public string Event => "pause";
     }
-    public class PlayPauseEvent
-    {
-        [JsonProperty("event")]
-        public string Event => "playpause";
-    }
     public class PlayEvent
     {
         [JsonProperty("event")]
         public string Event => "play";
+    }
+    public class StopEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "stop";
+    }
+    public class ShuffleEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "shuffle";
+
+        [JsonProperty("shuffle")]
+        public bool shuffle { get; set; }
+    }
+    public class LoopStatusEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "loopstatus";
+
+        [JsonProperty("status")]
+        public LoopStatus status { get; set; }
     }
     public class ExitEvent
     {
@@ -193,7 +263,7 @@ namespace MusicBeePlugin
         private MusicBeeApiInterface mbApiInterface;
         private PluginInfo about = new PluginInfo();
 
-        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationTokenSource listener_cts = new CancellationTokenSource();
 
         Socket wineOut;
 
@@ -278,104 +348,64 @@ namespace MusicBeePlugin
             switch (type)
             {
                 case NotificationType.PluginStartup:
-                    Console.WriteLine($"MPRISBee D: Plugin startup");
-                    uint uid = Syscalls.l_getuid();
-
-                    try
                     {
-                        string path = "/tmp/mprisbee" + Convert.ToString(uid) + "/wine-out";
-                        Console.WriteLine($"MPRISBee D: Path: {path}");
-                        wineOut = new Socket(path);
+                        Console.WriteLine($"MPRISBee D: Plugin startup");
+                        uint uid = Syscalls.l_getuid();
 
-                        StartListening();
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"MPRISBee E: {ex}");
-                    }
+                        try
+                        {
+                            string path = "/tmp/mprisbee" + Convert.ToString(uid) + "/wine.sock";
+                            Console.WriteLine($"MPRISBee D: Path: {path}");
+                            wineOut = new Socket(path);
 
-                    Console.WriteLine($"MPRISBee D: Plugin startuped");
+                            StartListening();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"MPRISBee E: {ex}");
+                        }
+
+                        SendPlayState();
+                        SendShuffle();
+                        SendLoopStatus();
+
+                        Console.WriteLine(mbApiInterface.Player_GetPlayState());
+
+                        if (mbApiInterface.Player_GetPlayState() == PlayState.Paused)
+                        {
+                            SendMetadataChange();
+                        }
+
+                        Console.WriteLine($"MPRISBee D: Plugin startuped");
+                    }
                     break;
 
                 case NotificationType.PlayStateChanged:
-                    Console.WriteLine($"MPRISBee D: PlayState changed");
-                    break;
+                    {
+                        Console.WriteLine($"MPRISBee D: PlayState changed");
+                        SendPlayState();
+                    }
+                break;
 
                 case NotificationType.TrackChanged:
-                    Console.WriteLine($"MPRISBee D: Track changed");
-                    string[] tags;
-                    
-                    mbApiInterface.NowPlaying_GetFileTags(new[] { MetaDataType.TrackTitle, MetaDataType.MultiArtist, MetaDataType.Album,
-                                                                  MetaDataType.DiscNo, MetaDataType.TrackNo,
-                                                                  MetaDataType.AlbumArtist, MetaDataType.MultiComposer, MetaDataType.Lyricist,
-                                                                  MetaDataType.Genres, MetaDataType.BeatsPerMin, MetaDataType.Year,
-                                                                  MetaDataType.Rating, MetaDataType.Comment }, out tags);
-                    string Title, Album, DiscNo, TrackNo, BeatsPerMin, Year, Rating;
-                    string[] Artists, Composers, Genres;
-                    string[] AlbumArtist = new string[1];
-                    string[] Lyricist = new string[1];
-                    string[] Comment = new string[1];
-
-                    (Title,   Album,   DiscNo,  TrackNo, AlbumArtist[0], Lyricist[0], BeatsPerMin, Year,     Rating,   Comment[0]) = 
-                    (tags[0], tags[2], tags[3], tags[4], tags[5],        tags[7],     tags[9],     tags[10], tags[11], tags[12]);
-
-                    (Artists, Composers, Genres) = (tags[1].Split('\0'), tags[6].Split('\0'), tags[8].Split('\0'));
-
-                    string FileUrl = mbApiInterface.NowPlaying_GetFileUrl();
-                    Console.WriteLine($"MPRISBee D: file url: {FileUrl}");
-                    string TrackId = MakeTrackId(FileUrl);
-
-                    long Length = mbApiInterface.NowPlaying_GetDuration();
-
-                    var ArtworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
-                    Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
-
-                    var metadata = new MprisMetadata
                     {
-                        TrackId = TrackId,
-                        Title = Title,
-                        Length = Length,
-                        Artists = Artists,
-                        Album = Album,
-                        FileUrl = FileUrl,
-
-                        DiscNumber = DiscNo,
-                        TrackNumber = TrackNo,
-                        AlbumArtist = AlbumArtist,
-                        Composers = Composers,
-                        Lyricist = Lyricist,
-                        Genres = Genres,
-                        AudioBpm = BeatsPerMin,
-                        ContentCreated = Year,
-                        UserRating = Rating,
-                        Comments = Comment,
-                        AlbumArtPath = ArtworkUrl,
-                    };
-
-                    Console.WriteLine(metadata);
-
-                    var trackChangeEvent = new TrackChangeEvent
-                    {
-                        Metadata = metadata,
-                    };
-
-                    string json = JsonConvert.SerializeObject(trackChangeEvent);
-
-                    try
-                    {
-                        wineOut.WriteStringNLTerminated(json);
+                        Console.WriteLine($"MPRISBee D: Track changed");
+                        SendMetadataChange();
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"MPRISBee E: {ex}");
-                    }
-                    
                     break;
 
                 case NotificationType.PlayerShuffleChanged:
+                    {
+                        Console.WriteLine($"MPRISBee D: Shuffle changed");
+                        SendShuffle();
+                    }
                     break;
 
                 case NotificationType.PlayerRepeatChanged:
+                    {
+                        Console.WriteLine($"MPRISBee D: Repeat changed");
+                        SendLoopStatus();
+                    }
                     break;
             }
         }
@@ -389,18 +419,198 @@ namespace MusicBeePlugin
                 ).Replace("-", "").ToLower();
         }
 
+        private void SendPlayState()
+        {
+            var json_event = "";
+
+            switch (mbApiInterface.Player_GetPlayState())
+            {
+                case PlayState.Playing:
+                    {
+                        var playEvent = new PlayEvent();
+                        json_event = JsonConvert.SerializeObject(playEvent);
+                    }
+                    break;
+
+                case PlayState.Paused:
+                case PlayState.Loading:
+                    {
+                        var pauseEvent = new PauseEvent();
+                        json_event = JsonConvert.SerializeObject(pauseEvent);
+                    }
+                    break;
+
+                case PlayState.Stopped:
+                case PlayState.Undefined:
+                    {
+                        var stopEvent = new PlayEvent();
+                        json_event = JsonConvert.SerializeObject(stopEvent);
+                    }
+                    break;
+            }
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json_event);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
+        private void SendMetadataChange()
+        {
+            string[] tags;
+
+            mbApiInterface.NowPlaying_GetFileTags(new[] {   MetaDataType.TrackTitle, MetaDataType.Artist, MetaDataType.Album,
+                                                MetaDataType.DiscNo, MetaDataType.TrackNo,
+                                                MetaDataType.AlbumArtist, MetaDataType.Composer, MetaDataType.Lyricist,
+                                                MetaDataType.Genres, MetaDataType.BeatsPerMin, MetaDataType.Year,
+                                                MetaDataType.Rating, MetaDataType.Comment }, out tags);
+            string Title, Album, DiscNo, TrackNo, BeatsPerMin, Year, Rating;
+            string[] Artist = new string[1];
+            string[] AlbumArtist = new string[1];
+            string[] Composer = new string[1];
+            string[] Lyricist = new string[1];
+            string[] Genres = new string[1];
+            string[] Comment = new string[1];
+
+            (Title,   Artist[0],   Album,   DiscNo,  TrackNo, AlbumArtist[0], Composer[0], Lyricist[0], Genres[0], BeatsPerMin, Year,     Rating,   Comment[0]) =
+            (tags[0], tags[1],     tags[2], tags[3], tags[4], tags[5],        tags[6],     tags[7],     tags[8],   tags[9],     tags[10], tags[11], tags[12]  );
+
+            Console.WriteLine($"MPRISBee D: Metadata:");
+            Console.WriteLine($"MPRISBee D: {tags}");
+
+            string FileUrl = mbApiInterface.NowPlaying_GetFileUrl();
+            Console.WriteLine($"MPRISBee D: file url: {FileUrl}");
+            string TrackId = MakeTrackId(FileUrl);
+
+            long Length = mbApiInterface.NowPlaying_GetDuration();
+
+            var metadata = new MprisMetadata
+            {
+                TrackId = TrackId,
+                Title = Title,
+                Length = Length,
+                Artists = Artist,
+                Album = Album,
+                FileUrl = FileUrl,
+
+                DiscNumber = DiscNo,
+                TrackNumber = TrackNo,
+                AlbumArtist = AlbumArtist,
+                Composers = Composer,
+                Lyricist = Lyricist,
+                Genres = Genres,
+                AudioBpm = BeatsPerMin,
+                ContentCreated = Year,
+                UserRating = Rating,
+                Comments = Comment,
+            };
+
+            Console.WriteLine(metadata);
+
+            var metadataChangeEvent = new MetadataChangeEvent
+            {
+                Metadata = metadata,
+            };
+
+            string json = JsonConvert.SerializeObject(metadataChangeEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+
+            Task.Run(() => WaitForArtUpdate(TrackId));
+        }
+
+        private async Task WaitForArtUpdate(string TrackId)
+        {
+            var ArtworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
+            Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
+
+            int tries = 1;
+            while (tries <= 3 && ArtworkUrl == null)
+            {
+                await Task.Delay(50*tries);
+                ArtworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
+                Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
+            }
+
+            SendArtUpdate(TrackId, ArtworkUrl);
+        }
+
+        private void SendArtUpdate(string TrackId, string ArtworkUrl)
+        {
+            var artUpdateEvent = new ArtUpdateEvent
+            {
+                TrackId = TrackId,
+                Path = ArtworkUrl,
+            };
+
+            string json = JsonConvert.SerializeObject(artUpdateEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
+        private void SendShuffle()
+        {
+            var shuffleEvent = new ShuffleEvent()
+            {
+                shuffle = mbApiInterface.Player_GetShuffle()
+            };
+
+            string json = JsonConvert.SerializeObject(shuffleEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
+        private void SendLoopStatus()
+        {
+            var loopStatusEvent = new LoopStatusEvent()
+            {
+                status = MPRISLoopStatus.RepeatToLoop(mbApiInterface.Player_GetRepeat())
+            };
+
+            string json = JsonConvert.SerializeObject(loopStatusEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
         private void StartListening()
         {
-            Task.Run(() => ListenLoop(cts.Token));
+            Task.Run(() => ListenLoop(listener_cts.Token));
         }
 
         private async Task ListenLoop(CancellationToken token)
         {
-            var settings = new JsonSerializerSettings
-            {
-                Converters = new List<JsonConverter> { new MprisMessageConverter() }
-            };
-
             try
             {
                 while (!token.IsCancellationRequested)
@@ -410,7 +620,7 @@ namespace MusicBeePlugin
                     {
                         try
                         {
-                            MprisMessage message = JsonConvert.DeserializeObject<MprisMessage>(json, settings);
+                            MprisMessage message = JsonConvert.DeserializeObject<MprisMessage>(json);
                             HandlePlayerEvent(message);
                         }
                         catch (JsonException ex)
@@ -428,7 +638,7 @@ namespace MusicBeePlugin
 
         private void StopListening()
         {
-            cts.Cancel();
+            listener_cts.Cancel();
         }
 
         private Task<string> ReadMessageAsync()
@@ -494,26 +704,15 @@ namespace MusicBeePlugin
                     break;
 
                 case MPRISLoopStatus Status:
-                    switch (Status.status)
-                    {
-                        case LoopStatus.None:
-                            mbApiInterface.Player_SetRepeat(RepeatMode.None);
-                            break;
-                        case LoopStatus.Track:
-                            mbApiInterface.Player_SetRepeat(RepeatMode.One);
-                            break;
-                        case LoopStatus.Playlist:
-                            mbApiInterface.Player_SetRepeat(RepeatMode.All);
-                            break;
-                    }
+                    mbApiInterface.Player_SetRepeat(MPRISLoopStatus.LoopToRepeat(Status.Status));
                     break;
 
                 case MPRISShuffle Shuffle:
-                    mbApiInterface.Player_SetShuffle(Shuffle.shuffle);
+                    mbApiInterface.Player_SetShuffle(Shuffle.Shuffle);
                     break;
 
                 case MPRISVolume Volume:
-                    mbApiInterface.Player_SetVolume(Volume.volume);
+                    mbApiInterface.Player_SetVolume(Volume.Volume);
                     break;
             }
         }
