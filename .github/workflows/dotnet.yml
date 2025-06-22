@@ -33,7 +33,7 @@ jobs:
           $zipPath = "$env:TEMP\gcc-10.3.0-tdm64-1-core.zip"
           $extractPath = "C:\TDM-GCC-64"
           
-          Invoke-WebRequest -Uri $fileUrl -OutFile $downloadPath
+          Invoke-WebRequest -Uri $fileUrl -OutFile $zipPath
           if (-Not (Test-Path $zipPath)) {
             Write-Error "Failed to download TDM-GCC ZIP file"
             exit 1
