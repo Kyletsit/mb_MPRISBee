@@ -29,16 +29,23 @@ jobs:
       
       - name: Install TDM-GCC
         run: |
-          $fileUrl = "https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe"
-          $downloadPath = "$env:TEMP\tdm64-gcc-10.3.0-2.exe"
+          $fileUrl = "https://github.com/jmeubank/tdm-gcc-src/releases/download/v10.3.0-tdm64-1/gcc-10.3.0-tdm64-1-core.zip"
+          $zipPath = "$env:TEMP\gcc-10.3.0-tdm64-1-core.zip"
+          &extractPath = "C:\TDM-GCC-64"
+          
           Invoke-WebRequest -Uri $fileUrl -OutFile $downloadPath
-          if (Test-Path $downloadPath) {
-            Write-Host "TDM-GCC installer downloaded successfully"
-          } else {
-            Write-Error "Failed to download TDM-GCC installer"
+          if (-Not (Test-Path $zipPath)) {
+            Write-Error "Failed to download TDM-GCC ZIP file"
             exit 1
           }
-          Start-Process -FilePath $downloadPath -ArgumentList "/SILENT" -Wait
+
+          Write-Host "Extracting TDM-GCC..."
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath
+
+          $env:Path += ";$extractPath\bin"
+
+          Write-Host "TDM-GCC installed successfully"
+          gcc --version
 
       - name: Restore NuGet packages
         run: |
@@ -50,4 +57,4 @@ jobs:
           
       - name: Compile C file
         run: |
-          C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def
+          gcc -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def
