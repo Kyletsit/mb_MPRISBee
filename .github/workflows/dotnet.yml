@@ -29,8 +29,16 @@ jobs:
       
       - name: Install TDM-GCC
         run: |
-          Invoke-WebRequest -Uri "https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe"
-          Start-Process -FilePath "tdm64-gcc-10.3.0-2.exe" -ArgumentList "/SILENT" -Wait
+          $fileUrl = "https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe"
+          $downloadPath = "$env:TEMP\tdm64-gcc-10.3.0-2.exe"
+          Invoke-WebRequest -Uri $fileUrl -OutFile $downloadPath
+          if (Test-Path $downloadPath) {
+            Write-Host "TDM-GCC installer downloaded successfully"
+          } else {
+            Write-Error "Failed to download TDM-GCC installer"
+            exit 1
+          }
+          Start-Process -FilePath $downloadPath -ArgumentList "/SILENT" -Wait
 
       - name: Restore NuGet packages
         run: |
