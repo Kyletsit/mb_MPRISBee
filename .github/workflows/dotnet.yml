@@ -31,7 +31,7 @@ jobs:
         run: |
           $fileUrl = "https://github.com/jmeubank/tdm-gcc-src/releases/download/v10.3.0-tdm64-1/gcc-10.3.0-tdm64-1-core.zip"
           $zipPath = "$env:TEMP\gcc-10.3.0-tdm64-1-core.zip"
-          &extractPath = "C:\TDM-GCC-64"
+          $extractPath = "C:\TDM-GCC-64"
           
           Invoke-WebRequest -Uri $fileUrl -OutFile $downloadPath
           if (-Not (Test-Path $zipPath)) {
