@@ -22,3 +22,27 @@ jobs:
       run: dotnet restore
     - name: Build
       run: dotnet build --no-restore
+    - name: Install dependencies
+      run: dotnet add package Microsoft.Bcl.AsyncInterfaces --version 9.0.5 --framework net48
+    - name: Install dependencies
+      run: dotnet add package Microsoft.CSharp --version 4.7.0 --framework net48
+    - name: Install dependencies
+      run: dotnet add package Newtonsoft.Json --version 13.0.3 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Buffers --version 4.5.1 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.IO.Pipelines --version 9.0.5 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Memory --version 4.5.5 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Numerics.Vectors --version 4.5.0 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Runtime.CompilerServices.Unsafe --version 6.0.0 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Text.Encodings.Web --version 9.0.5 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Threading.Channels --version 8.0.0 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.Threading.Tasks.Extensions --version 4.5.4 --framework net48
+    - name: Install dependencies
+      run: dotnet add package System.ValueTuple --version 4.5.0 --framework net48
