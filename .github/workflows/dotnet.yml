@@ -42,10 +42,10 @@ jobs:
           Write-Host "Extracting TDM-GCC..."
           Expand-Archive -Path $zipPath -DestinationPath $extractPath
 
-          $env:Path += ";$extractPath\bin"
+          $env:Path += ";$extractPath\bin;$extractPath\lib"
 
           Write-Host "TDM-GCC installed successfully"
-          gcc --version
+          "$extractPath\bin\gcc.exe" --version
 
       - name: Restore NuGet packages
         run: |
@@ -57,4 +57,4 @@ jobs:
           
       - name: Compile C file
         run: |
-          gcc -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def
+          "$extractPath\bin\gcc.exe" -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def -L$extractPath\lib -lmingw32
