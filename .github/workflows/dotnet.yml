@@ -22,12 +22,11 @@ jobs:
 
       - name: Set up .NET Framework 4.8
         run: |
-          # Install .NET Framework 4.8 on the runner
-          choco install dotnetframework --version=4.8.0
+          choco install netfx-4.8 -y
 
       - name: Restore NuGet packages
         run: |
-          nuget restore YourSolution.sln
+          nuget restore MPRISBee.sln
 
       - name: Build the solution
         run: |
