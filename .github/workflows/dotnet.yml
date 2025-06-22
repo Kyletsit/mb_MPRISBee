@@ -57,4 +57,4 @@ jobs:
           
       - name: Compile C file
         run: |
-          "$extractPath\bin\gcc.exe" -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def -L$extractPath\lib -lmingw32
+          gcc -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def -L$extractPath\lib -lmingw32
