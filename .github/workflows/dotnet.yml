@@ -45,7 +45,7 @@ jobs:
           $env:Path += ";$extractPath\bin;$extractPath\lib"
 
           Write-Host "TDM-GCC installed successfully"
-          "$extractPath\bin\gcc.exe" --version
+          gcc.exe --version
 
       - name: Restore NuGet packages
         run: |
