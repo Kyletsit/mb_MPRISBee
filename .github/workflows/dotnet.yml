@@ -26,6 +26,11 @@ jobs:
 
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
+      
+      - name: Install TDM-GCC
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe"
+          Start-Process -FilePath "tdm64-gcc-10.3.0-2.exe" -ArgumentList "/SILENT" -Wait
 
       - name: Restore NuGet packages
         run: |
@@ -34,3 +39,7 @@ jobs:
       - name: Build the solution
         run: |
           msbuild MPRISBee.sln /p:Configuration=${{ github.event.inputs.build_config }}
+          
+      - name: Compile C file
+        run: |
+          C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def
