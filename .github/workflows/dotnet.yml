@@ -25,9 +25,7 @@ jobs:
           choco install netfx-4.8 -y
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v1.0.2
-        with:
-          vs-version: '2022'
+        uses: microsoft/setup-msbuild@v2
 
       - name: Restore NuGet packages
         run: |
