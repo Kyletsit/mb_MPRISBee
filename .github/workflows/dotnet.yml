@@ -72,6 +72,9 @@ jobs:
           i686-w64-mingw32-gcc --version
           i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/linux_syscalls.dll linux_syscalls.c linux_syscalls.def
           
-     # - name: Compile C file
-      #  run: |
-      #    gcc -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o D:\a\mb_MPRISBee\mb_MPRISBee\bin\Release\linux_syscalls.dll D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.c D:\a\mb_MPRISBee\mb_MPRISBee\linux_syscalls.def
+      - name: Upload compiled files
+        uses: actions/upload-artifact@v4
+        with:           
+          name: mb_MPRISBee plugin
+          path: |
+            bin/Release/**
