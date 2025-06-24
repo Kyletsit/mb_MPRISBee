@@ -16,7 +16,7 @@ namespace LinuxSys
 {
     public static class Syscalls
     {
-        private const string DLL_NAME = "linux_syscalls.dll";
+        private const string DLL_NAME = "mb_linux_syscalls.dll";
 
         [DllImport(DLL_NAME, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
         public static extern int l_mkdir([MarshalAs(UnmanagedType.LPStr)] string pathname, uint mode);
