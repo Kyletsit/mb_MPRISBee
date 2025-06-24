@@ -168,11 +168,7 @@
     <NativeOutputPath>../mprisbee-dbus/target/$(Configuration.ToLowerInvariant())/</NativeOutputPath>
   </PropertyGroup>
   <PropertyGroup>
-<<<<<<< HEAD
     <PostBuildEvent>if "%GITHUB_ACTIONS%" == "true" (
-=======
-    <PostBuildEvent>if "%25GITHUB_ACTIONS%25" == "true" (
->>>>>>> 73e2a17 (Try to put DLLs into a subfolder)
   echo Skipping c compilation post-build
 ) ELSE (
   if $(Configuration)==Release (
@@ -196,9 +192,7 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-<<<<<<< HEAD
 </Project>
-=======
   <Target Name="EnsureProbingPath" AfterTargets="Build">
     <Exec Command="powershell -ExecutionPolicy Bypass -File AddProbingPath.ps1 &quot;$(TargetPath).config&quot;" />
   </Target>
@@ -214,4 +208,3 @@
     <Move SourceFiles="$(OutputPath)MPRISBee\linux_syscalls.dll" DestinationFolder="$(OutputPath)\" />
   </Target>
 </Project>
->>>>>>> 73e2a17 (Try to put DLLs into a subfolder)
