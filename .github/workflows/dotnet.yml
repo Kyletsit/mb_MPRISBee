@@ -26,26 +26,6 @@ jobs:
 
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
-      
-      # - name: Install TDM-GCC
-        # run: |
-        #  $fileUrl = "https://github.com/jmeubank/tdm-gcc-src/releases/download/v10.3.0-tdm64-1/gcc-10.3.0-tdm64-1-core.zip"
-        #  $zipPath = "$env:TEMP\gcc-10.3.0-tdm64-1-core.zip"
-        #  $extractPath = "C:\TDM-GCC-64"
-        #  
-        #  Invoke-WebRequest -Uri $fileUrl -OutFile $zipPath
-        #  if (-Not (Test-Path $zipPath)) {
-        #    Write-Error "Failed to download TDM-GCC ZIP file"
-        #    exit 1
-        #  }
-
-        #  Write-Host "Extracting TDM-GCC..."
-        #  Expand-Archive -Path $zipPath -DestinationPath $extractPath
-
-        #  $env:Path += ";$extractPath\bin;$extractPath\lib"
-
-        #  Write-Host "TDM-GCC installed successfully"
-        #  gcc.exe --version
 
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
@@ -70,11 +50,13 @@ jobs:
         shell: msys2 {0}
         run: |
           i686-w64-mingw32-gcc --version
-          i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/linux_syscalls.dll linux_syscalls.c linux_syscalls.def
+          i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/mb_linux_syscalls.dll linux_syscalls.c linux_syscalls.def
           
       - name: Upload compiled files
         uses: actions/upload-artifact@v4
         with:           
           name: mb_MPRISBee plugin
           path: |
-            bin/Release/**
+            bin/Release/*.dll
+            bin/Release/*.dll.config
+            bin/Release/MPRISBee/*.dll
