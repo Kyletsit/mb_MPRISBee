@@ -192,7 +192,6 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-</Project>
   <Target Name="EnsureProbingPath" AfterTargets="Build">
     <Exec Command="powershell -ExecutionPolicy Bypass -File AddProbingPath.ps1 &quot;$(TargetPath).config&quot;" />
   </Target>
