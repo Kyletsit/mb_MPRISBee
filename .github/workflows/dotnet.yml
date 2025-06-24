@@ -41,16 +41,16 @@ jobs:
       - name: Restore NuGet packages
         run: |
           nuget restore MPRISBee.sln
-
-      - name: Build the solution
-        run: |
-          msbuild MPRISBee.sln /p:Configuration=${{ github.event.inputs.build_config }}
           
       - name: Compile C file using MSVC
         shell: msys2 {0}
         run: |
           i686-w64-mingw32-gcc --version
           i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/mb_linux_syscalls.dll linux_syscalls.c linux_syscalls.def
+
+      - name: Build the solution
+        run: |
+          msbuild MPRISBee.sln /p:Configuration=${{ github.event.inputs.build_config }}
           
       - name: Upload compiled files
         uses: actions/upload-artifact@v4
