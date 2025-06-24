@@ -57,7 +57,7 @@ jobs:
       - name: Upload compiled files
         uses: actions/upload-artifact@v4
         with:           
-          name: mb_MPRISBee plugin
+          name: mb_MPRISBee
           path: |
             bin/Release/*.dll
             bin/Release/*.dll.config
