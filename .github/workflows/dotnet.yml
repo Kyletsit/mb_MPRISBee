@@ -45,6 +45,8 @@ jobs:
       - name: Compile C file using MSVC
         shell: msys2 {0}
         run: |
+          mkdir bin
+          mkdir bin/Release
           i686-w64-mingw32-gcc --version
           i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/mb_linux_syscalls.dll linux_syscalls.c linux_syscalls.def
 
