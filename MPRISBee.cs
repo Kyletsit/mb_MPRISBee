@@ -536,11 +536,19 @@ namespace MusicBeePlugin
             Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
 
             int tries = 1;
-            while (tries <= 3 && ArtworkUrl == null)
+            while (string.IsNullOrWhiteSpace(ArtworkUrl))
             {
-                await Task.Delay(50*tries);
+                if (tries > 3)
+                {
+                    Console.WriteLine($"MPRISBee D: artwork not found");
+                    return;
+                }
+
+                await Task.Delay(50 * tries);
                 ArtworkUrl = mbApiInterface.NowPlaying_GetArtworkUrl();
                 Console.WriteLine($"MPRISBee D: artwork url: {ArtworkUrl}");
+
+                tries += 1;
             }
 
             SendArtUpdate(TrackId, ArtworkUrl);
@@ -681,7 +689,7 @@ namespace MusicBeePlugin
                     break;
 
                 case MPRISSeek Seek:
-                    if (Seek.Offset <= int.MaxValue && Seek.Offset >= int.MinValue)
+                    if (int.MinValue >= Seek.Offset && Seek.Offset <= int.MaxValue)
                     {
                         var currentPos = mbApiInterface.Player_GetPosition();
                         mbApiInterface.Player_SetPosition(currentPos + (int)Seek.Offset);
@@ -693,7 +701,7 @@ namespace MusicBeePlugin
                     break;
 
                 case MPRISPosition Position:
-                    if (Position.Position <= int.MaxValue && Position.Position >= int.MinValue)
+                    if (int.MinValue <= Position.Position && Position.Position <= int.MaxValue)
                     {
                         mbApiInterface.Player_SetPosition((int)Position.Position);
                     }

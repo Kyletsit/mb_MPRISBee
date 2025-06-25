@@ -172,9 +172,9 @@
   echo Skipping c compilation post-build
 ) ELSE (
   if $(Configuration)==Release (
-    C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o $(ProjectDir)$(OutDir)mb_linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
+    C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -Wall -Wextra -O2 -o $(ProjectDir)$(OutDir)MPRISBee_linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
   ) else (
-    C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -o $(ProjectDir)$(OutDir)mb_linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
+    C:\TDM-GCC-64\bin\gcc.exe -m32 -masm=intel -shared -mconsole -o $(ProjectDir)$(OutDir)MPRISBee_linux_syscalls.dll $(ProjectDir)linux_syscalls.c $(ProjectDir)linux_syscalls.def
   )
 )</PostBuildEvent>
   </PropertyGroup>
@@ -204,6 +204,6 @@
     <Move SourceFiles="@(DependentDlls)" DestinationFolder="$(OutputPath)MPRISBee\" />
   </Target>
   <Target Name="MoveBackSyscallsDll" AfterTargets="Build">
-    <Move SourceFiles="$(OutputPath)MPRISBee\mb_linux_syscalls.dll" DestinationFolder="$(OutputPath)\" />
+    <Move SourceFiles="$(OutputPath)MPRISBee\MPRISBee_linux_syscalls.dll" DestinationFolder="$(OutputPath)\" />
   </Target>
 </Project>
