@@ -33,17 +33,22 @@ namespace MusicBeePlugin
     {
         public long Offset { get; set; }
     }
+
     public class MPRISPosition : MprisMessage
     {
         public string TrackId { get; set; }
         public long Position { get; set; }
     }
+
+    public class MPRISGetPosition : MprisMessage { }
+
     public enum LoopStatus
     {
         None,
         Track,
         Playlist
     }
+
     public class MPRISLoopStatus : MprisMessage
     {
         public static LoopStatus RepeatToLoop(RepeatMode mode)
@@ -76,13 +81,15 @@ namespace MusicBeePlugin
 
         public LoopStatus Status { get; set; }
     }
+
     public class MPRISShuffle : MprisMessage
     {
         public bool Shuffle { get; set; }
     }
+
     public class MPRISVolume : MprisMessage
     {
-        public float Volume { get; set; }
+        public double Volume { get; set; }
     }
 
     public class MprisMessageConverter : JsonConverter
@@ -114,6 +121,7 @@ namespace MusicBeePlugin
                     TrackId = (string)obj["trackid"],
                     Position = (long)obj["position"],
                 },
+                "getposition" => new MPRISGetPosition(),
                 "loop_status" => new MPRISLoopStatus()
                 {
                     Status = obj["status"].ToObject<LoopStatus>(),
@@ -124,7 +132,7 @@ namespace MusicBeePlugin
                 },
                 "volume" => new MPRISVolume()
                 {
-                    Volume = (float)obj["volume"],
+                    Volume = (double)obj["volume"],
                 },
                 _ => throw new JsonSerializationException($"Unknown event type: {eventType}")
             };
@@ -202,6 +210,7 @@ namespace MusicBeePlugin
         [JsonProperty("metadata")]
         public MprisMetadata Metadata { get; set; }
     }
+
     public class ArtUpdateEvent
     {
         [JsonProperty("event")]
@@ -213,6 +222,7 @@ namespace MusicBeePlugin
         [JsonProperty("albumartpath")]
         public string Path { get; set; }
     }
+
     public class SeekEvent
     {
         [JsonProperty("event")]
@@ -221,21 +231,43 @@ namespace MusicBeePlugin
         [JsonProperty("offset")]
         public long Offset { get; set; }
     }
+
     public class PauseEvent
     {
         [JsonProperty("event")]
         public string Event => "pause";
     }
+
     public class PlayEvent
     {
         [JsonProperty("event")]
         public string Event => "play";
     }
+
     public class StopEvent
     {
         [JsonProperty("event")]
         public string Event => "stop";
     }
+
+    public class PositionEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "position";
+
+        [JsonProperty("position")]
+        public long position { get; set; }
+    }
+
+    public class VolumeChangeEvent
+    {
+        [JsonProperty("event")]
+        public string Event => "volume";
+
+        [JsonProperty("volume")]
+        public double volume { get; set; }
+    }
+
     public class ShuffleEvent
     {
         [JsonProperty("event")]
@@ -244,14 +276,16 @@ namespace MusicBeePlugin
         [JsonProperty("shuffle")]
         public bool shuffle { get; set; }
     }
+
     public class LoopStatusEvent
     {
         [JsonProperty("event")]
         public string Event => "loopstatus";
 
         [JsonProperty("status")]
-        public LoopStatus status { get; set; }
+        public string status { get; set; }
     }
+
     public class ExitEvent
     {
         [JsonProperty("event")]
@@ -266,6 +300,8 @@ namespace MusicBeePlugin
         private CancellationTokenSource listener_cts = new CancellationTokenSource();
 
         Socket wineOut;
+
+        bool suspended = false;
 
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
@@ -319,6 +355,11 @@ namespace MusicBeePlugin
         // MusicBee is closing the plugin (plugin is being disabled by user or MusicBee is shutting down)
         public void Close(PluginCloseReason reason)
         {
+            if (suspended)
+            {
+                return;
+            }
+
             var exitEvent = new ExitEvent();
             string json = JsonConvert.SerializeObject(exitEvent);
 
@@ -344,6 +385,11 @@ namespace MusicBeePlugin
         // you need to set about.ReceiveNotificationFlags = PlayerEvents to receive all notifications, and not just the startup event
         public async Task ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
+            if (suspended)
+            {
+                return;
+            }
+
             // perform some action depending on the notification type
             switch (type)
             {
@@ -362,6 +408,7 @@ namespace MusicBeePlugin
                         }
                         catch (Exception ex)
                         {
+                            suspended = true;
                             Console.WriteLine($"MPRISBee E: {ex}");
                         }
 
@@ -405,6 +452,20 @@ namespace MusicBeePlugin
                     {
                         Console.WriteLine($"MPRISBee D: Repeat changed");
                         SendLoopStatus();
+                    }
+                    break;
+
+                case NotificationType.VolumeLevelChanged:
+                    {
+                        Console.WriteLine($"MPRISBee D: Volume changed");
+                        VolumeChange();
+                    }
+                    break;
+
+                case NotificationType.VolumeMuteChanged:
+                    {
+                        Console.WriteLine($"MPRISBee D: Mute changed");
+                        MuteChange();
                     }
                     break;
             }
@@ -574,6 +635,25 @@ namespace MusicBeePlugin
             }
         }
 
+        private void SendPosition()
+        {
+            var positionEvent = new PositionEvent()
+            {
+                position = (long)mbApiInterface.Player_GetPosition()
+            };
+
+            string json = JsonConvert.SerializeObject(positionEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
         private void SendShuffle()
         {
             var shuffleEvent = new ShuffleEvent()
@@ -597,7 +677,7 @@ namespace MusicBeePlugin
         {
             var loopStatusEvent = new LoopStatusEvent()
             {
-                status = MPRISLoopStatus.RepeatToLoop(mbApiInterface.Player_GetRepeat())
+                status = MPRISLoopStatus.RepeatToLoop(mbApiInterface.Player_GetRepeat()).ToString()
             };
 
             string json = JsonConvert.SerializeObject(loopStatusEvent);
@@ -609,6 +689,51 @@ namespace MusicBeePlugin
             catch (Exception ex)
             {
                 Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
+        private void SendVolumeChange(float vol)
+        {
+            var volumeChangeEvent = new VolumeChangeEvent()
+            {
+                volume = (double)vol
+            };
+
+            string json = JsonConvert.SerializeObject(volumeChangeEvent);
+
+            try
+            {
+                wineOut.WriteStringNLTerminated(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MPRISBee E: {ex}");
+            }
+        }
+
+        private void VolumeChange()
+        {
+            var mute = mbApiInterface.Player_GetMute();
+            if (mute)
+            {
+                return;
+            }
+            else
+            {
+                SendVolumeChange(mbApiInterface.Player_GetVolume());
+            }
+        }
+
+        private void MuteChange()
+        {
+            var mute = mbApiInterface.Player_GetMute();
+            if (mute)
+            {
+                SendVolumeChange(0);
+            }
+            else
+            {
+                SendVolumeChange(mbApiInterface.Player_GetVolume());
             }
         }
 
@@ -711,6 +836,12 @@ namespace MusicBeePlugin
                     }
                     break;
 
+                case MPRISGetPosition:
+                    {
+                        SendPosition();
+                    }
+                    break;
+
                 case MPRISLoopStatus Status:
                     mbApiInterface.Player_SetRepeat(MPRISLoopStatus.LoopToRepeat(Status.Status));
                     break;
@@ -720,7 +851,7 @@ namespace MusicBeePlugin
                     break;
 
                 case MPRISVolume Volume:
-                    mbApiInterface.Player_SetVolume(Volume.Volume);
+                    mbApiInterface.Player_SetVolume((float)Volume.Volume);
                     break;
             }
         }
