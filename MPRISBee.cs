@@ -418,7 +418,7 @@ namespace MusicBeePlugin
 
                         Console.WriteLine(mbApiInterface.Player_GetPlayState());
 
-                        if (mbApiInterface.Player_GetPlayState() == PlayState.Paused)
+                        if (mbApiInterface.Player_GetPlayState() == PlayState.Paused || mbApiInterface.Player_GetPlayState() == PlayState.Playing)
                         {
                             SendMetadataChange();
                         }
@@ -658,7 +658,7 @@ namespace MusicBeePlugin
         {
             var shuffleEvent = new ShuffleEvent()
             {
-                shuffle = mbApiInterface.Player_GetShuffle()
+                shuffle = (mbApiInterface.Player_GetShuffle() || mbApiInterface.Player_GetAutoDjEnabled())
             };
 
             string json = JsonConvert.SerializeObject(shuffleEvent);
