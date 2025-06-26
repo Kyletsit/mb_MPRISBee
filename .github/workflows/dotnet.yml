@@ -41,7 +41,7 @@ jobs:
 
       - name: Build the solution
         run: |
-          msbuild MPRISBee.sln /p:Configuration=${{ github.event.inputs.build_config }}
+          msbuild MPRISBee.sln /p:Configuration=Release
           
       - name: Upload compiled files
         uses: actions/upload-artifact@v4
