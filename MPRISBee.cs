@@ -2,10 +2,10 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Linq;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -303,6 +303,32 @@ namespace MusicBeePlugin
 
         bool suspended = false;
 
+        public Plugin()
+        {
+            AppDomain.CurrentDomain.AssemblyResolve += (object _, ResolveEventArgs args) =>
+            {
+                string assemblyFile = args.Name.Contains(",")
+                    ? args.Name.Substring(0, args.Name.IndexOf(','))
+                    : args.Name;
+
+                assemblyFile += ".dll";
+
+                string absoluteFolder = Path.GetDirectoryName(new Uri(Assembly.GetExecutingAssembly().CodeBase).LocalPath);
+                string targetPath = Path.Combine(absoluteFolder, "MPRISBee", assemblyFile);
+
+                try
+                {
+                    Debug.WriteLine($"MPRISBee D: Trying to load assembly {targetPath}");
+                    return Assembly.LoadFile(targetPath);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"MPRISBee E: Failed to load assembly {targetPath}: {ex.Message}");
+                    return null;
+                }
+            };
+        }
+
         public PluginInfo Initialise(IntPtr apiInterfacePtr)
         {
             mbApiInterface = new MusicBeeApiInterface();
@@ -396,6 +422,7 @@ namespace MusicBeePlugin
                 case NotificationType.PluginStartup:
                     {
                         Console.WriteLine($"MPRISBee D: Plugin startup");
+
                         uint uid = Syscalls.l_getuid();
 
                         try
@@ -776,7 +803,7 @@ namespace MusicBeePlugin
 
         private Task<string> ReadMessageAsync()
         {
-            return Task.Run(() => wineOut.ReadNLTerminatedString());
+            return Task.Run(() => wineOut.ReadStringNLTerminated());
         }
 
         private void HandlePlayerEvent(MprisMessage message)

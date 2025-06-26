@@ -12,29 +12,6 @@ struct sockaddr_un {
 
 #define AF_UNIX     1
 
-EXPORT __declspec(naked) int l_mkdir(const char* pathname, unsigned int mode) {
-    __asm__ (
-            "push ebx\n\t"
-            "mov eax, 0x27\n\t"
-            "mov ebx, [esp + 4 + 4]\n\t"
-            "mov ecx, [esp + 4 + 8]\n\t"
-            "int 0x80\n\t"
-            "pop ebx\n\t"
-            "ret"
-            );
-}
-
-EXPORT __declspec(naked) int l_rmdir(const char* pathname) {
-    __asm__ (
-            "push ebx\n\t"
-            "mov eax, 0x28\n\t"
-            "mov ebx, [esp + 4 + 4]\n\t"
-            "int 0x80\n\t"
-            "pop ebx\n\t"
-            "ret"
-            );
-}
-
 EXPORT __declspec(naked) unsigned int l_getpid() {
     __asm__ (
             "mov eax, 0x14\n\t"
@@ -68,19 +45,6 @@ EXPORT __declspec(naked) int l_socketcall(int call, void* args) {
             "mov eax, 0x66\n\t"
             "mov ebx, [esp + 4 + 4]\n\t"
             "mov ecx, [esp + 4 + 8]\n\t"
-            "int 0x80\n\t"
-            "pop ebx\n\t"
-            "ret"
-            );
-}
-
-EXPORT __declspec(naked) int l_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg) {
-    __asm__ (
-            "push ebx\n\t"
-            "mov eax, 0x37\n\t"
-            "mov ebx, [esp + 4 + 4]\n\t"
-            "mov ecx, [esp + 4 + 8]\n\t"
-            "mov edx, [esp + 4 + 12]\n\t"
             "int 0x80\n\t"
             "pop ebx\n\t"
             "ret"
