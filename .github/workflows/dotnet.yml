@@ -1,16 +1,7 @@
 name: Build
 
 on:
-  workflow_dispatch:
-    inputs:
-      build_config:
-        description: 'Build Configuration'
-        required: true
-        default: 'Release'
-        type: choice
-        options:
-          - Debug
-          - Release
+  workflow_dispatch
 
 jobs:
   build:
@@ -46,7 +37,6 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p bin/Release/MPRISBee
-          i686-w64-mingw32-gcc --version
           i686-w64-mingw32-gcc -masm=intel -shared -mconsole -Wall -Wextra -O2 -o bin/Release/MPRISBee/linux_syscalls.dll linux_syscalls.c linux_syscalls.def
 
       - name: Build the solution
