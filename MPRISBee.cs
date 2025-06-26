@@ -305,6 +305,7 @@ namespace MusicBeePlugin
 
         public Plugin()
         {
+            // from https://github.com/sll552/DiscordBee/blob/master/DiscordBee.cs
             AppDomain.CurrentDomain.AssemblyResolve += (object _, ResolveEventArgs args) =>
             {
                 string assemblyFile = args.Name.Contains(",")
