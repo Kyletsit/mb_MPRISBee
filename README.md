@@ -1,3 +1,8 @@
+# DISCONTINUED
+I have stopped using MusicBee in favour of native players, thus neglecting this repo. Since then, it broke with a recent version of wine.
+Fortunately a fork has been made which fixes that issue and makes further imrovements, so check it out!
+https://github.com/UrbanCMC/mb_MPRISBee
+
 # mb_MPRISBee plugin
 A MusicBee plugin that sends player status to [mprisbee-bridge](https://github.com/Kyletsit/mprisbee-bridge) for MPRIS integration. Setup instructions are in that repo's README.
 
